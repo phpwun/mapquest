@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # Frontend React Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    environment:
+      - REACT_APP_API_URL=http://localhost:4000
+      - REACT_APP_MINIO_URL=http://localhost:9000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - photobook-network
+
+  # Backend API Service
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    depends_on:
+      - mongodb
+      - minio
+    environment:
+      - PORT=4000
+      - MONGODB_URI=mongodb://mongodb:27017/photobook
+      - JWT_SECRET=your_jwt_secret_key_change_this_in_production
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=minio_access_key
+      - MINIO_SECRET_KEY=minio_secret_key
+      - MINIO_BUCKET_NAME=photos
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - photobook-network
+    restart: always
+
+  # MongoDB Database
+  mongodb:
+    image: mongo:5.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - photobook-network
+    environment:
+      - MONGO_INITDB_DATABASE=photobook
+    restart: always
+
+  # MinIO Object Storage for Images
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minio_access_key
+      - MINIO_ROOT_PASSWORD=minio_secret_key
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - photobook-network
+    restart: always
+
+  # MinIO initialization service to create bucket
+  minio-init:
+    image: minio/mc
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 10 &&
+      /usr/bin/mc config host add myminio http://minio:9000 minio_access_key minio_secret_key &&
+      /usr/bin/mc mb myminio/photos --ignore-existing &&
+      /usr/bin/mc policy set public myminio/photos &&
+      exit 0;
+      "
+    networks:
+      - photobook-network
+
+networks:
+  photobook-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  minio_data:

@@ -1,0 +1,98 @@
+# PhotoBook - Interactive Travel Map & Photo Journal
+
+PhotoBook is a web application that allows users to create, share, and view travel memories on an interactive map. Users can upload photos from their trips, organize them geographically, and add comments. The application features both a map view and a photo book view, providing different ways to experience the shared journeys.
+
+## Features
+
+- **User Authentication**: Secure registration and login system with JWT.
+- **Personalized Experience**: Each user selects their favorite color and animal during signup, which are used to customize their map markers and comment bubbles.
+- **Trip Management**: Create, edit, and delete trips with location and description.
+- **Photo Upload**: Upload up to 20 photos per trip with geolocation data.
+- **Interactive Map**: View trips on a map with custom markers colored based on user preferences.
+- **Route Visualization**: When a trip marker is clicked, all photos are shown with a route line connecting them.
+- **Photo Book View**: Carousel view for viewing photos in fullscreen with comments displayed as speech bubbles.
+- **Comments System**: Add comments to trips, which appear as ephemeral bubbles on the map.
+- **Mobile Responsive**: Fully responsive design for all screen sizes.
+
+## Technology Stack
+
+- **Frontend**: React, React Router, Styled Components, Leaflet
+- **Backend**: Node.js, Express
+- **Database**: MongoDB
+- **Image Storage**: MinIO
+- **Authentication**: JWT
+- **Docker**: Containerized deployment with Docker Compose
+
+## Getting Started
+
+### Prerequisites
+
+- Docker and Docker Compose
+- Git
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/photobook.git
+   cd photobook
+   ```
+
+2. Create the necessary directory structure:
+   ```bash
+   mkdir -p frontend/src/components/auth
+   mkdir -p frontend/src/components/dashboard
+   mkdir -p frontend/src/components/layout
+   mkdir -p frontend/src/components/map
+   mkdir -p frontend/src/components/photobook
+   mkdir -p frontend/src/components/routing
+   mkdir -p frontend/src/components/trips
+   mkdir -p frontend/src/context/alert
+   mkdir -p frontend/src/context/auth
+   mkdir -p frontend/src/context/trip
+   mkdir -p frontend/src/utils
+   mkdir -p frontend/public
+   mkdir -p frontend/nginx
+   mkdir -p backend/models
+   mkdir -p backend/routes
+   mkdir -p backend/middleware
+   ```
+
+3. Copy all the provided code files to their respective directories.
+
+4. Start the application with Docker Compose:
+   ```bash
+   docker-compose up --build
+   ```
+
+5. Access the application:
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:4000
+   - MinIO Console: http://localhost:9001 (Access Key: minio_access_key, Secret Key: minio_secret_key)
+
+## Usage
+
+1. Register a new account, selecting your favorite color and animal.
+2. Create a new trip with a title, description, and main location.
+3. Upload photos with geolocation data.
+4. View your trip on the interactive map or in photobook mode.
+5. Add comments to share your thoughts or reactions.
+
+## Security Considerations
+
+For production deployment:
+
+1. Change the JWT secret key in the Docker Compose file.
+2. Use secure passwords for MinIO.
+3. Enable HTTPS for all services.
+4. Implement additional request validation and rate limiting.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- Leaflet.js for the interactive mapping capabilities
+- MinIO for object storage compatibility
+- MongoDB for flexible data modeling
