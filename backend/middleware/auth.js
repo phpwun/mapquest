@@ -15,6 +15,10 @@ module.exports = function(req, res, next) {
     req.user = decoded.user;
     next();
   } catch (err) {
+    // More specific error handling
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).json({ message: 'Token has expired' });
+    }
     res.status(401).json({ message: 'Token is not valid' });
   }
 };

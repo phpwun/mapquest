@@ -41,6 +41,8 @@ router.get('/:id', async (req, res) => {
 // Create a new trip
 router.post('/', auth, async (req, res) => {
   try {
+    console.log('Received trip data:', JSON.stringify(req.body, null, 2));
+    
     const { title, description, mainLocation, photos } = req.body;
 
     // Check if photos array has more than 20 items
@@ -48,23 +50,36 @@ router.post('/', auth, async (req, res) => {
       return res.status(400).json({ message: 'Trip cannot have more than 20 photos' });
     }
 
+    // Fix image URLs if needed (replace minio:9000 with localhost:9000)
+    let processedPhotos = photos || [];
+    if (processedPhotos.length > 0) {
+      processedPhotos = processedPhotos.map(photo => {
+        if (photo.url && photo.url.includes('minio:9000')) {
+          photo.url = photo.url.replace('minio:9000', 'localhost:9000');
+        }
+        return photo;
+      });
+    }
+
     const newTrip = new Trip({
       title,
       description,
       user: req.user.id,
       mainLocation,
-      photos: photos || []
+      photos: processedPhotos
     });
 
+    console.log('Saving trip to database:', JSON.stringify(newTrip, null, 2));
     const trip = await newTrip.save();
 
     // Populate user fields for response
     await trip.populate('user', 'username favoriteColor favoriteAnimal');
 
+    console.log('Trip saved successfully:', trip._id);
     res.status(201).json(trip);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error creating trip:', err);
+    res.status(500).json({ message: 'Server error: ' + err.message });
   }
 });
 
@@ -90,11 +105,22 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(401).json({ message: 'User not authorized' });
     }
 
+    // Fix image URLs if needed (replace minio:9000 with localhost:9000)
+    let processedPhotos = photos || [];
+    if (processedPhotos.length > 0) {
+      processedPhotos = processedPhotos.map(photo => {
+        if (photo.url && photo.url.includes('minio:9000')) {
+          photo.url = photo.url.replace('minio:9000', 'localhost:9000');
+        }
+        return photo;
+      });
+    }
+
     // Update trip
     if (title) trip.title = title;
     if (description) trip.description = description;
     if (mainLocation) trip.mainLocation = mainLocation;
-    if (photos) trip.photos = photos;
+    if (photos) trip.photos = processedPhotos;
 
     await trip.save();
 
@@ -103,11 +129,11 @@ router.put('/:id', auth, async (req, res) => {
 
     res.json(trip);
   } catch (err) {
-    console.error(err.message);
+    console.error('Error updating trip:', err);
     if (err.kind === 'ObjectId') {
       return res.status(404).json({ message: 'Trip not found' });
     }
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error: ' + err.message });
   }
 });
 

@@ -286,15 +286,28 @@ const TripForm = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
   
-  const onLocationChange = e => {
-    setFormData({
-      ...formData,
-      mainLocation: {
-        ...mainLocation,
-        [e.target.name]: e.target.value
-      }
-    });
-  };
+// In TripForm.js, update the onLocationChange function:
+
+const onLocationChange = e => {
+  const { name, value } = e.target;
+  
+  // Validate lat/lng values with appropriate max/min
+  if (name === 'lat' && (value < -90 || value > 90)) {
+    setAlert('Latitude must be between -90 and 90 degrees', 'danger');
+  }
+  
+  if (name === 'lng' && (value < -180 || value > 180)) {
+    setAlert('Longitude must be between -180 and 180 degrees', 'danger');
+  }
+  
+  setFormData({
+    ...formData,
+    mainLocation: {
+      ...mainLocation,
+      [name]: value
+    }
+  });
+};
   
   const onSubmit = async e => {
     e.preventDefault();
@@ -306,13 +319,33 @@ const TripForm = () => {
     
     // Convert lat/lng to numbers
     const formattedData = {
-      ...formData,
+      title,
+      description,
       mainLocation: {
-        ...mainLocation,
         lat: parseFloat(mainLocation.lat),
-        lng: parseFloat(mainLocation.lng)
+        lng: parseFloat(mainLocation.lng),
+        address: mainLocation.address || ''
       }
     };
+    
+    // Safely format photos array
+    if (photos && photos.length > 0) {
+      formattedData.photos = photos.map(photo => ({
+        title: photo.title || 'Photo',
+        description: photo.description || '',
+        url: photo.url,
+        location: {
+          lat: parseFloat(photo.location.lat) || 0,
+          lng: parseFloat(photo.location.lng) || 0,
+          address: photo.location.address || ''
+        },
+        order: typeof photo.order === 'number' ? photo.order : 0
+      }));
+    } else {
+      formattedData.photos = [];
+    }
+    
+    console.log('Submitting trip data:', formattedData);
     
     try {
       setLoading(true);
@@ -348,6 +381,7 @@ const TripForm = () => {
       setLoading(false);
       navigate(`/trips/${res.data._id}`);
     } catch (err) {
+      console.error('Trip submission error:', err.response?.data || err);
       setAlert(
         err.response?.data?.message || `Error ${isEdit ? 'updating' : 'creating'} trip`, 
         'danger'
@@ -379,37 +413,80 @@ const TripForm = () => {
       return;
     }
     
+    // Validate main location coordinates - at least one photo should use these
+    if (!mainLocation || !mainLocation.lat || !mainLocation.lng) {
+      setAlert('Please enter main location coordinates before uploading photos', 'danger');
+      return;
+    }
+  
     try {
-      const formData = new FormData();
-      formData.append('photo', file);
+      // Try to extract location from photo EXIF data (if available)
+      let photoLat = mainLocation.lat;
+      let photoLng = mainLocation.lng;
       
-      const res = await axios.post('/api/photos/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
+      // Create a FileReader to read the image file
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          // We'll attempt to use a simple EXIF reader library (would need to be added to your dependencies)
+          // This is simplified - in a real implementation, use a proper EXIF library
+          // For demonstration purposes only - implementation would depend on your EXIF reading library
+          
+          // For now, use the main location as fallback
+          const formData = new FormData();
+          formData.append('photo', file);
+          
+          // Make sure token is in headers
+          const token = localStorage.getItem('token');
+          
+          console.log('Uploading photo...');
+          const res = await axios.post('/api/photos/upload', formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+              'x-auth-token': token
+            }
+          });
+          
+          console.log('Upload response:', res.data);
+          
+          // Fix for URL - replace "minio" with "localhost" in the URL
+          let imageUrl = res.data.url;
+          if (imageUrl && imageUrl.includes('minio:9000')) {
+            imageUrl = imageUrl.replace('minio:9000', 'localhost:9000');
+          }
+          
+          // Create new photo object with safer handling of coordinates
+          const newPhoto = {
+            title: file.name || 'Photo',
+            description: '',
+            url: imageUrl,
+            location: {
+              lat: parseFloat(photoLat) || 0,
+              lng: parseFloat(photoLng) || 0,
+              address: mainLocation.address || ''
+            },
+            order: photos ? photos.length : 0
+          };
+          
+          // Safety check for photos array
+          const currentPhotos = Array.isArray(photos) ? photos : [];
+          
+          // Add to photos array
+          setFormData(prevData => ({
+            ...prevData,
+            photos: [...currentPhotos, newPhoto]
+          }));
+          
+          setAlert('Photo uploaded successfully', 'success');
+        } catch (error) {
+          console.error('Error processing photo:', error);
+          setAlert('Error processing photo metadata', 'danger');
         }
-      });
-      
-      // Create new photo object
-      const newPhoto = {
-        title: file.name,
-        description: '',
-        url: res.data.url,
-        location: {
-          lat: mainLocation.lat,
-          lng: mainLocation.lng,
-          address: mainLocation.address
-        },
-        order: photos.length
       };
       
-      // Add to photos array
-      setFormData({
-        ...formData,
-        photos: [...photos, newPhoto]
-      });
-      
-      setAlert('Photo uploaded successfully', 'success');
+      reader.readAsArrayBuffer(file);
     } catch (err) {
+      console.error('Upload error:', err);
       setAlert(
         err.response?.data?.message || 'Error uploading photo', 
         'danger'

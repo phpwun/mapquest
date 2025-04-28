@@ -33,39 +33,78 @@ const minioClient = new Minio.Client({
   secretKey: process.env.MINIO_SECRET_KEY || 'minio_secret_key'
 });
 
-// Upload a photo
-router.post('/upload', auth, upload.single('photo'), async (req, res) => {
+// Verify MinIO connection
+router.use(async (req, res, next) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
+    if (!req.path.includes('/upload')) {
+      return next();
     }
-
-    // Generate random filename to avoid collisions
-    const fileExtension = path.extname(req.file.originalname);
-    const fileName = `${crypto.randomBytes(16).toString('hex')}${fileExtension}`;
     
-    // Upload file to MinIO
-    await minioClient.putObject(
-      process.env.MINIO_BUCKET_NAME || 'photos',
-      fileName,
-      req.file.buffer,
-      {
-        'Content-Type': req.file.mimetype,
-      }
+    // Check if bucket exists
+    const bucketExists = await minioClient.bucketExists(
+      process.env.MINIO_BUCKET_NAME || 'photos'
     );
-
-    // Generate URL
-    const fileUrl = `http://${process.env.MINIO_ENDPOINT || 'localhost'}:${process.env.MINIO_PORT || '9000'}/${process.env.MINIO_BUCKET_NAME || 'photos'}/${fileName}`;
-
-    res.status(201).json({
-      message: 'Photo uploaded successfully',
-      url: fileUrl,
-      fileName
-    });
+    
+    if (!bucketExists) {
+      console.error('MinIO bucket does not exist');
+      return res.status(500).json({ message: 'Storage configuration error' });
+    }
+    
+    next();
   } catch (err) {
-    console.error('Error uploading file:', err);
-    res.status(500).json({ message: 'Error uploading file' });
+    console.error('MinIO connection error:', err);
+    res.status(500).json({ message: 'Storage connection error' });
   }
+});
+
+// Upload a photo
+router.post('/upload', auth, (req, res) => {
+  // Debug auth info
+  console.log('Auth header present:', !!req.header('x-auth-token'));
+  console.log('User ID from token:', req.user?.id);
+  
+  upload.single('photo')(req, res, async (err) => {
+    if (err) {
+      console.error('Multer error:', err);
+      return res.status(400).json({ message: err.message });
+    }
+    
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: 'No file uploaded' });
+      }
+
+      // Generate random filename to avoid collisions
+      const fileExtension = path.extname(req.file.originalname);
+      const fileName = `${crypto.randomBytes(16).toString('hex')}${fileExtension}`;
+      
+      console.log('Uploading file to MinIO:', fileName);
+      
+      // Upload file to MinIO
+      await minioClient.putObject(
+        process.env.MINIO_BUCKET_NAME || 'photos',
+        fileName,
+        req.file.buffer,
+        {
+          'Content-Type': req.file.mimetype,
+        }
+      );
+
+      // Generate URL
+      const fileUrl = `http://${process.env.MINIO_ENDPOINT || 'localhost'}:${process.env.MINIO_PORT || '9000'}/${process.env.MINIO_BUCKET_NAME || 'photos'}/${fileName}`;
+
+      console.log('File uploaded successfully:', fileUrl);
+      
+      res.status(201).json({
+        message: 'Photo uploaded successfully',
+        url: fileUrl,
+        fileName
+      });
+    } catch (err) {
+      console.error('Error uploading file:', err);
+      res.status(500).json({ message: 'Error uploading file: ' + err.message });
+    }
+  });
 });
 
 // Delete a photo
