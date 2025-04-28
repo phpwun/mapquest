@@ -72,6 +72,7 @@ const CommentBubble = ({ comment, trip, position }) => {
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
+          animation: fadeIn 0.5s ease-in-out;
         ">
           ${animalEmoji} ${comment.text.length > 20 ? comment.text.substring(0, 20) + '...' : comment.text}
           <div style="

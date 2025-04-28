@@ -413,80 +413,86 @@ const onLocationChange = e => {
       return;
     }
     
-    // Validate main location coordinates - at least one photo should use these
-    if (!mainLocation || !mainLocation.lat || !mainLocation.lng) {
-      setAlert('Please enter main location coordinates before uploading photos', 'danger');
+    // Validate main location coordinates for fallback
+    if (!mainLocation.lat || !mainLocation.lng) {
+      setAlert('Please enter location coordinates first. These must be within valid ranges: latitude (-90 to 90), longitude (-180 to 180)', 'danger');
       return;
     }
-  
+    
+    setLoading(true);
+    
     try {
-      // Try to extract location from photo EXIF data (if available)
-      let photoLat = mainLocation.lat;
-      let photoLng = mainLocation.lng;
-      
-      // Create a FileReader to read the image file
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        try {
-          // We'll attempt to use a simple EXIF reader library (would need to be added to your dependencies)
-          // This is simplified - in a real implementation, use a proper EXIF library
-          // For demonstration purposes only - implementation would depend on your EXIF reading library
-          
-          // For now, use the main location as fallback
-          const formData = new FormData();
-          formData.append('photo', file);
-          
-          // Make sure token is in headers
-          const token = localStorage.getItem('token');
-          
-          console.log('Uploading photo...');
-          const res = await axios.post('/api/photos/upload', formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-              'x-auth-token': token
-            }
-          });
-          
-          console.log('Upload response:', res.data);
-          
-          // Fix for URL - replace "minio" with "localhost" in the URL
-          let imageUrl = res.data.url;
-          if (imageUrl && imageUrl.includes('minio:9000')) {
-            imageUrl = imageUrl.replace('minio:9000', 'localhost:9000');
-          }
-          
-          // Create new photo object with safer handling of coordinates
-          const newPhoto = {
-            title: file.name || 'Photo',
-            description: '',
-            url: imageUrl,
-            location: {
-              lat: parseFloat(photoLat) || 0,
-              lng: parseFloat(photoLng) || 0,
-              address: mainLocation.address || ''
-            },
-            order: photos ? photos.length : 0
-          };
-          
-          // Safety check for photos array
-          const currentPhotos = Array.isArray(photos) ? photos : [];
-          
-          // Add to photos array
-          setFormData(prevData => ({
-            ...prevData,
-            photos: [...currentPhotos, newPhoto]
-          }));
-          
-          setAlert('Photo uploaded successfully', 'success');
-        } catch (error) {
-          console.error('Error processing photo:', error);
-          setAlert('Error processing photo metadata', 'danger');
-        }
+      // Try to extract location from EXIF data
+      let photoLocation = {
+        lat: parseFloat(mainLocation.lat),
+        lng: parseFloat(mainLocation.lng),
+        address: mainLocation.address || ''
       };
       
-      reader.readAsArrayBuffer(file);
+      try {
+        // Import the utility functions
+        const { extractGPSCoordinates } = await import('../../utils/exifUtils');
+        const coordinates = await extractGPSCoordinates(file);
+        
+        if (coordinates) {
+          console.log('EXIF coordinates found:', coordinates);
+          photoLocation = {
+            lat: coordinates.lat,
+            lng: coordinates.lng,
+            address: ''
+          };
+        }
+      } catch (exifError) {
+        console.error('Error extracting EXIF data:', exifError);
+        // Continue with main location as fallback
+      }
+      
+      // Upload the photo
+      const formData = new FormData();
+      formData.append('photo', file);
+      
+      // Make sure token is in headers
+      const token = localStorage.getItem('token');
+      
+      console.log('Uploading photo...');
+      const res = await axios.post('/api/photos/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'x-auth-token': token
+        }
+      });
+      
+      console.log('Upload response:', res.data);
+      
+      // Fix for URL - replace "minio" with "localhost" in the URL if needed
+      let imageUrl = res.data.url;
+      if (imageUrl && imageUrl.includes('minio:9000')) {
+        imageUrl = imageUrl.replace('minio:9000', 'localhost:9000');
+      }
+      
+      // Create new photo object
+      const newPhoto = {
+        title: file.name || 'Photo',
+        description: '',
+        url: imageUrl,
+        location: photoLocation,
+        order: photos ? photos.length : 0
+      };
+      
+      // Safety check for photos array
+      const currentPhotos = Array.isArray(photos) ? photos : [];
+      
+      // Add to photos array
+      setFormData(prevData => ({
+        ...prevData,
+        photos: [...currentPhotos, newPhoto]
+      }));
+      
+      setLoading(false);
+      setAlert('Photo uploaded successfully', 'success');
     } catch (err) {
       console.error('Upload error:', err);
+      setLoading(false);
       setAlert(
         err.response?.data?.message || 'Error uploading photo', 
         'danger'
